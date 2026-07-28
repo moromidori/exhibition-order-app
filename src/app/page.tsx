@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShoppingCart, CheckCircle, Package, Search, Plus, Minus, Trash2 } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Package, Search, Plus, Minus, AlertCircle } from 'lucide-react';
 
-// サンプル商品データ（要件に合わせて後から変更可能）
 const PRODUCTS = [
   { id: 'p1', name: 'オリジナルアクリルスタンド A', category: 'ノベルティ', price: 500, minQty: 100, image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300' },
   { id: 'p2', name: '展示会限定トートバッグ', category: 'バッグ', price: 800, minQty: 50, image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=300' },
@@ -17,7 +16,6 @@ export default function OrderApp() {
   const [category, setCategory] = useState('ALL');
   const [step, setStep] = useState<'catalog' | 'form' | 'complete'>('catalog');
 
-  // フォーム状態
   const [formData, setFormData] = useState({
     companyName: '',
     department: '',
@@ -29,8 +27,8 @@ export default function OrderApp() {
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // 郵便番号自動入力
   const handleZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const zip = e.target.value;
     setFormData(prev => ({ ...prev, zip }));
@@ -77,16 +75,46 @@ export default function OrderApp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // 今後APIを接続
-    setTimeout(() => {
+    setErrorMessage('');
+
+    // カート内の商品詳細をまとめる
+    const cartItems = Object.entries(cart).map(([id, qty]) => {
+      const product = PRODUCTS.find(p => p.id === id);
+      return {
+        id,
+        name: product?.name || '',
+        price: product?.price || 0,
+        quantity: qty,
+        subtotal: (product?.price || 0) * qty
+      };
+    });
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          items: cartItems,
+          totalAmount
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setStep('complete');
+      } else {
+        setErrorMessage('注文の保存に失敗しました。もう一度お試しください。');
+      }
+    } catch (err) {
+      setErrorMessage('通信エラーが発生しました。ネットワーク状態をご確認ください。');
+    } finally {
       setIsSubmitting(false);
-      setStep('complete');
-    }, 1200);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      {/* ヘッダー */}
       <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -111,14 +139,12 @@ export default function OrderApp() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* STEP 1: カタログ選択 */}
         {step === 'catalog' && (
           <div>
             <div className="mb-8 space-y-4">
               <h1 className="text-2xl font-bold">製品カタログオーダー</h1>
               <p className="text-slate-600 text-sm">展示会用ノベルティ・サンプルのご注文を承ります。</p>
               
-              {/* 検索・フィルター */}
               <div className="flex flex-col md:flex-row gap-4 pt-2">
                 <div className="relative flex-1">
                   <Search className="w-5 h-5 absolute left-3 top-2.5 text-slate-400" />
@@ -133,7 +159,6 @@ export default function OrderApp() {
               </div>
             </div>
 
-            {/* 商品一覧 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredProducts.map(p => {
                 const qty = cart[p.id] || 0;
@@ -181,7 +206,6 @@ export default function OrderApp() {
               })}
             </div>
 
-            {/* 下部固定カートバー */}
             {Object.keys(cart).length > 0 && (
               <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-lg z-20">
                 <div className="max-w-5xl mx-auto flex items-center justify-between">
@@ -201,13 +225,19 @@ export default function OrderApp() {
           </div>
         )}
 
-        {/* STEP 2: 配送先入力 */}
         {step === 'form' && (
           <div className="max-w-2xl mx-auto">
             <button onClick={() => setStep('catalog')} className="text-sm text-indigo-600 hover:underline mb-4 inline-block">
               ← カタログに戻る
             </button>
             <h2 className="text-xl font-bold mb-6">配送先・発注者情報の入力</h2>
+
+            {errorMessage && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="bg-white p-6 border rounded-xl shadow-sm space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -309,7 +339,7 @@ export default function OrderApp() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition mt-6"
+                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition mt-6 disabled:bg-indigo-400"
               >
                 {isSubmitting ? '送信中...' : '注文を確定する'}
               </button>
@@ -317,13 +347,12 @@ export default function OrderApp() {
           </div>
         )}
 
-        {/* STEP 3: 完了画面 */}
         {step === 'complete' && (
           <div className="max-w-md mx-auto text-center py-12 bg-white p-8 border rounded-xl shadow-sm">
             <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">ご注文を受け付けました</h2>
             <p className="text-slate-600 text-sm mb-6">
-              ご入力いただいたメールアドレス宛に確認メールをお送りしました。担当者より追ってご連絡いたします。
+              データベースに正常に保存されました。担当者より追ってご連絡いたします。
             </p>
             <button
               onClick={() => {
