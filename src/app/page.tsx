@@ -3,17 +3,59 @@
 import React, { useState } from 'react';
 import { ShoppingCart, CheckCircle, Package, Search, Plus, Minus, AlertCircle } from 'lucide-react';
 
+// =========================================================================
+// 📦 商品データ（ここをご自由に変更・追加・削除してください！）
+// =========================================================================
+// ・id: 重複しない商品ID
+// ・name: 商品名
+// ・category: カテゴリ
+// ・price: 単価（円）
+// ・minQty: 最小発注単位（個）
+// ・maxQty: 🌟 受注可能数（上限数）
+// ・image: 画像URL（後述の画像設定参照）
+// =========================================================================
 const PRODUCTS = [
-  { id: 'p1', name: 'オリジナルアクリルスタンド A', category: 'ノベルティ', price: 500, minQty: 100, image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300' },
-  { id: 'p2', name: '展示会限定トートバッグ', category: 'バッグ', price: 800, minQty: 50, image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=300' },
-  { id: 'p3', name: 'プレミアム卓上カレンダー 2027', category: '印刷物', price: 1200, minQty: 30, image: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=300' },
-  { id: 'p4', name: 'ロゴ入りボールペン 3本セット', category: '筆記具', price: 300, minQty: 200, image: 'https://images.unsplash.com/photo-1585336261026-875a60a1c92f?w=300' },
+  { 
+    id: 'p1', 
+    name: 'オリジナルアクリルスタンド A', 
+    category: 'ノベルティ', 
+    price: 500, 
+    minQty: 100, 
+    maxQty: 500, // ★ 受注可能数（例: 最大500個まで）
+    image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300' 
+  },
+  { 
+    id: 'p2', 
+    name: '展示会限定トートバッグ', 
+    category: 'バッグ', 
+    price: 800, 
+    minQty: 50, 
+    maxQty: 200, // ★ 受注可能数
+    image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=300' 
+  },
+  { 
+    id: 'p3', 
+    name: 'プレミアム卓上カレンダー 2027', 
+    category: '印刷物', 
+    price: 1200, 
+    minQty: 30, 
+    maxQty: 100, // ★ 受注可能数
+    image: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=300' 
+  },
+  { 
+    id: 'p4', 
+    name: 'ロゴ入りボールペン 3本セット', 
+    category: '筆記具', 
+    price: 300, 
+    minQty: 200, 
+    maxQty: 1000, // ★ 受注可能数
+    image: 'https://images.unsplash.com/photo-1585336261026-875a60a1c92f?w=300' 
+  },
 ];
 
 export default function OrderApp() {
   const [cart, setCart] = useState<{ [key: string]: number }>({});
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('ALL');
   const [step, setStep] = useState<'catalog' | 'form' | 'complete'>('catalog');
 
   const [formData, setFormData] = useState({
@@ -49,13 +91,17 @@ export default function OrderApp() {
   const updateQuantity = (id: string, qty: number) => {
     const product = PRODUCTS.find(p => p.id === id);
     if (!product) return;
-    if (qty < 0) return;
+    
+    // 受注可能数（maxQty）を超えないように制御
+    const targetQty = Math.min(Math.max(0, qty), product.maxQty);
+
     setCart(prev => {
       const next = { ...prev };
-      if (qty === 0) {
+      if (targetQty === 0 || targetQty < product.minQty) {
+        // 最小発注数を下回った場合はカートから削除
         delete next[id];
       } else {
-        next[id] = qty;
+        next[id] = targetQty;
       }
       return next;
     });
@@ -66,18 +112,13 @@ export default function OrderApp() {
     return sum + (p ? p.price * qty : 0);
   }, 0);
 
-  const filteredProducts = PRODUCTS.filter(p => {
-    const matchSearch = p.name.includes(search);
-    const matchCat = category === 'ALL' || p.category === category;
-    return matchSearch && matchCat;
-  });
+  const filteredProducts = PRODUCTS.filter(p => p.name.includes(search));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage('');
 
-    // カート内の商品詳細をまとめる
     const cartItems = Object.entries(cart).map(([id, qty]) => {
       const product = PRODUCTS.find(p => p.id === id);
       return {
@@ -162,20 +203,34 @@ export default function OrderApp() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredProducts.map(p => {
                 const qty = cart[p.id] || 0;
+                const isMaxReached = qty >= p.maxQty;
+                const isSoldOut = p.maxQty <= 0;
+
                 return (
                   <div key={p.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col sm:flex-row">
                     <img src={p.image} alt={p.name} className="w-full sm:w-36 h-36 object-cover bg-slate-100" />
                     <div className="p-4 flex-1 flex flex-col justify-between">
                       <div>
-                        <span className="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded">
-                          {p.category}
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded">
+                            {p.category}
+                          </span>
+                          <span className={`text-xs font-bold ${isSoldOut ? 'text-red-500' : 'text-slate-500'}`}>
+                            {isSoldOut ? '完売（受付終了）' : `受注可能数: ${p.maxQty.toLocaleString()}個`}
+                          </span>
+                        </div>
                         <h3 className="font-bold text-slate-900 mt-1">{p.name}</h3>
-                        <p className="text-sm text-slate-500 mt-1">¥{p.price.toLocaleString()} / 個 (発注単位: {p.minQty}個〜)</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                          ¥{p.price.toLocaleString()} / 個 (発注単位: {p.minQty}個〜)
+                        </p>
                       </div>
 
                       <div className="mt-4 flex items-center justify-between">
-                        {qty === 0 ? (
+                        {isSoldOut ? (
+                          <button disabled className="px-3 py-1.5 bg-slate-100 text-slate-400 font-semibold rounded-lg text-sm cursor-not-allowed">
+                            受付終了
+                          </button>
+                        ) : qty === 0 ? (
                           <button
                             onClick={() => updateQuantity(p.id, p.minQty)}
                             className="px-3 py-1.5 bg-indigo-50 text-indigo-600 font-semibold rounded-lg text-sm hover:bg-indigo-100 transition"
@@ -183,20 +238,31 @@ export default function OrderApp() {
                             + カートに追加 ({p.minQty}個)
                           </button>
                         ) : (
-                          <div className="flex items-center space-x-2 border rounded-lg p-1 bg-slate-50">
-                            <button
-                              onClick={() => updateQuantity(p.id, qty - 10 < p.minQty ? 0 : qty - 10)}
-                              className="p-1 hover:bg-white rounded text-slate-600"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </button>
-                            <span className="font-bold text-sm px-2">{qty} 個</span>
-                            <button
-                              onClick={() => updateQuantity(p.id, qty + 10)}
-                              className="p-1 hover:bg-white rounded text-slate-600"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
+                          <div className="flex flex-col items-start space-y-1">
+                            <div className="flex items-center space-x-2 border rounded-lg p-1 bg-slate-50">
+                              <button
+                                onClick={() => updateQuantity(p.id, qty - 10 < p.minQty ? 0 : qty - 10)}
+                                className="p-1 hover:bg-white rounded text-slate-600"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <span className="font-bold text-sm px-2">{qty} 個</span>
+                              <button
+                                onClick={() => updateQuantity(p.id, qty + 10)}
+                                disabled={isMaxReached}
+                                className={`p-1 rounded ${
+                                  isMaxReached 
+                                    ? 'text-slate-300 cursor-not-allowed' 
+                                    : 'hover:bg-white text-slate-600'
+                                }`}
+                                title={isMaxReached ? '受注上限に達しました' : '増やして追加'}
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                            {isMaxReached && (
+                              <span className="text-[10px] text-amber-600 font-medium">※上限数に達しました</span>
+                            )}
                           </div>
                         )}
                       </div>
